@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="darkman_navy">#101827</color>
+    <color name="darkman_blue">#2F80ED</color>
+    <color name="darkman_teal">#16B3A3</color>
+    <color name="darkman_bg">#F4F7FB</color>
+    <color name="darkman_text">#172033</color>
+
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/darkman_blue</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/darkman_navy</item>
+        <item name="android:navigationBarColor">@color/darkman_navy</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

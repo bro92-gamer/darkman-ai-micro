@@ -1,0 +1,15 @@
+# Android
+android-source/.gradle/
+android-source/build/
+android-source/app/build/
+android-source/local.properties
+android-source/.idea/
+android-source/*.iml
+
+# Cloud (Node)
+cloud-server/node_modules/
+cloud-server/package-lock.json
+
+# System
+.DS_Store
+*.log

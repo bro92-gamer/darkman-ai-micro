@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/darkman_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="18dp"
+        android:background="@color/darkman_navy">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="DARKMAN-AI"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:textSize="22sp" />
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Offline-ready assistant"
+            android:textColor="#B9C7DE"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chat"
+                android:textColor="@color/darkman_text"
+                android:textStyle="bold"
+                android:textSize="18sp" />
+            <EditText
+                android:id="@+id/chatInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Ask Darkman-AI something"
+                android:inputType="textCapSentences|textMultiLine"
+                android:minLines="2"
+                android:gravity="top"
+                android:backgroundTint="@color/darkman_blue" />
+            <Button
+                android:id="@+id/sendButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Send (provider or offline)" />
+            <TextView
+                android:id="@+id/chatOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:textColor="@color/darkman_text"
+                android:textSize="14sp"
+                android:textIsSelectable="true" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#D8E0EC" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Offline tools"
+                android:textColor="@color/darkman_text"
+                android:textStyle="bold"
+                android:textSize="18sp" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/filesButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Files" />
+                <Button android:id="@+id/memoryButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Memory" />
+                <Button android:id="@+id/appsButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Apps" />
+            </LinearLayout>
+            <TextView
+                android:id="@+id/toolOutput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:textColor="@color/darkman_text"
+                android:textSize="13sp"
+                android:textIsSelectable="true" />
+
+            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#D8E0EC" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="Provider settings"
+                android:textColor="@color/darkman_text"
+                android:textStyle="bold"
+                android:textSize="18sp" />
+            <Spinner
+                android:id="@+id/providerSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/apiKeyInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Selected provider API key"
+                android:inputType="textPassword" />
+            <EditText
+                android:id="@+id/baseUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Cloud BASE_URL (optional)"
+                android:inputType="textUri" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/saveButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Save" />
+                <Button android:id="@+id/testButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Test" />
+                <Button android:id="@+id/permissionsButton" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Permissions" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

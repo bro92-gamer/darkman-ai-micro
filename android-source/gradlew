@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+set -eu
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+GRADLE_VERSION=8.7
+DIST_DIR="${GRADLE_USER_HOME:-$HOME/.gradle}/darkman-distributions/gradle-$GRADLE_VERSION"
+if [ ! -x "$DIST_DIR/bin/gradle" ]; then
+  TMP_DIR="${TMPDIR:-/tmp}/darkman-gradle-$$"
+  mkdir -p "$TMP_DIR" "$(dirname "$DIST_DIR")"
+  ARCHIVE="$TMP_DIR/gradle.zip"
+  echo "Downloading Gradle $GRADLE_VERSION (one time)…"
+  curl -fsSL -o "$ARCHIVE" "https://services.gradle.org/distributions/gradle-$GRADLE_VERSION-bin.zip"
+  rm -rf "$TMP_DIR/unpacked" "$DIST_DIR"
+  mkdir -p "$TMP_DIR/unpacked"
+  unzip -q "$ARCHIVE" -d "$TMP_DIR/unpacked"
+  mv "$TMP_DIR/unpacked/gradle-$GRADLE_VERSION" "$DIST_DIR"
+  rm -rf "$TMP_DIR"
+fi
+exec "$DIST_DIR/bin/gradle" "$@"

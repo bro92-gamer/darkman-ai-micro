@@ -1,0 +1,13 @@
+services:
+  darkman-cloud:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    restart: unless-stopped
