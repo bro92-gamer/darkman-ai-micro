@@ -26,11 +26,17 @@ function requireText(value, name, max = 20000) {
 }
 function jsonError(res, status, message) { return res.status(status).json({ error: message }); }
 
-async function callProvider(provider, prompt, system = "You are Darkman-AI, a concise and practical assistant.") {
+function isSimplePrompt(prompt) {
+  return prompt.length < 180 && !/(why|compare|debug|architect|analy[sz]e|خطة|حلل)/i.test(prompt);
+}
+async function callProvider(provider, prompt, system = "You are Darkman-AI, a concise and practical assistant.", requestedModel = "auto") {
   const key = keys[provider];
   if (!key) throw new Error(`${provider} is not configured on the cloud server`);
   if (provider === "Google Gemini") {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_MODEL || "gemini-1.5-flash"}:generateContent?key=${encodeURIComponent(key)}`;
+    const configuredMain = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const configuredLite = process.env.GEMINI_LITE_MODEL || "gemini-2.0-flash-lite";
+    const model = requestedModel === "lite" || (requestedModel === "auto" && isSimplePrompt(prompt)) ? configuredLite : configuredMain;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
     const response = await fetch(url, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ contents: [{ parts: [{ text: `${system}\n\n${prompt}` }] }] })
@@ -57,8 +63,9 @@ app.post("/v1/ai/chat", async (req, res) => {
   try {
     const prompt = requireText(req.body?.prompt, "prompt");
     const provider = providerOrDefault(req.body?.provider);
-    const result = await callProvider(provider, prompt);
-    return res.json({ provider, result });
+    const modelMode = typeof req.body?.modelMode === "string" ? req.body.modelMode : "auto";
+    const result = await callProvider(provider, prompt, undefined, modelMode);
+    return res.json({ provider, modelMode, result });
   } catch (error) { return jsonError(res, 400, error.message); }
 });
 

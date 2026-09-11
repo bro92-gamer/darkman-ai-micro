@@ -1,15 +1,45 @@
+# Gradle
+.gradle/
+**/.gradle/
+build/
+**/build/
+
 # Android
-android-source/.gradle/
-android-source/build/
-android-source/app/build/
-android-source/local.properties
-android-source/.idea/
-android-source/*.iml
+.externalNativeBuild/
+**/.externalNativeBuild/
+.cxx/
+**/.cxx/
 
-# Cloud (Node)
-cloud-server/node_modules/
-cloud-server/package-lock.json
+# IDE
+.idea/
+*.iml
 
-# System
+# Local SDK / environment
+local.properties
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
 *.log
+
+# Generated APKs
+*.apk
+*.aab
+
+# Model downloads
+*.gguf.part
