@@ -1,3 +1,4 @@
+
 #include "llama-mmap.h"
 
 #include "llama-impl.h"
@@ -9,6 +10,20 @@
 #include <stdexcept>
 #include <cerrno>
 #include <algorithm>
+
+// Android fallback: posix_madvise/POSIX_MADV_* may be unavailable in the NDK.
+#if defined(__ANDROID__)
+    #ifndef POSIX_MADV_WILLNEED
+        #define POSIX_MADV_WILLNEED 0
+    #endif
+    #ifndef POSIX_MADV_RANDOM
+        #define POSIX_MADV_RANDOM 0
+    #endif
+    static inline int llama_android_posix_madvise(void *, size_t, int) {
+        return 0;
+    }
+    #define posix_madvise llama_android_posix_madvise
+#endif
 
 #ifdef __has_include
     #if __has_include(<unistd.h>)
