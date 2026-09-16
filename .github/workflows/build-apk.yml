@@ -23,14 +23,15 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android build dependencies
-        run: |
-          sdkmanager "platform-tools" \
-                     "platforms;android-35" \
-                     "build-tools;35.0.0" \
-                     "cmake;3.22.1" \
-                     "ndk;29.0.14206865"
+        with:
+          api-level: 35
+          build-tools: 35.0.0
+          ndk: '29.0.14206865'
+          cmake: '3.22.1'
+          components: |
+            platform-tools
+            platforms;android-35
+            cmdline-tools;latest
 
       - name: Build release APK
         working-directory: android-source
