@@ -12,35 +12,33 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
 
-      - name: Prepare Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ''
+
+      - name: Install Android SDK components
         shell: bash
         run: |
-          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
-
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          echo "SDKMANAGER=$SDKMANAGER"
-
-          test -x "$SDKMANAGER"
-
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+          sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
-          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
 
       - name: Build APK
         working-directory: android-source
