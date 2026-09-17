@@ -21,20 +21,19 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-
       - name: Install Android SDK components
         shell: bash
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$ANDROID_HOME" \
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --install \
+            "cmdline-tools;latest" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses
 
       - name: Build release APK
         working-directory: android-source
