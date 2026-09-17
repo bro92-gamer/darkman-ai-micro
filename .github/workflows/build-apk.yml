@@ -3,7 +3,8 @@ name: Build Darkman AI APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
 
 jobs:
   build:
@@ -20,20 +21,37 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 35
-          build-tools: 35.0.0
-          ndk: 29.0.14206865
-          cmake: 3.22.1
-          components: platform-tools,platforms;android-35
+      - name: Prepare Android SDK
+        shell: bash
+        run: |
+          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/16.0/bin/sdkmanager"
+
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "SDKMANAGER=$SDKMANAGER"
+
+          test -x "$SDKMANAGER"
+
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;29.0.14206865" \
+            "cmake;3.22.1"
+
+          yes | "$SDKMANAGER" --sdk_root="$ANDROID_HOME" --licenses
 
       - name: Build APK
         working-directory: android-source
         run: |
           chmod +x ./gradlew
           ./gradlew assembleRelease --stacktrace
+
+      - name: Verify APK
+        run: |
+          ls -lh android-source/app/build/outputs/apk/release/
+          test -n "$(find android-source/app/build/outputs/apk/release -name '*.apk' -print -quit)"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
