@@ -51,9 +51,11 @@ class FileSystemTool(private val root: File) : Tool {
                         .filter { it.isFile && it.length() < 2_000_000 }
                         .mapNotNull { f ->
                             runCatching {
-                                if (f.readText().contains(needle, true))
+                                if (f.readText().contains(needle, true)) {
                                     f.relativeTo(root).path
-                                else null
+                                } else {
+                                    null
+                                }
                             }.getOrNull()
                         }
                         .take(100)
@@ -122,41 +124,41 @@ class TermuxTool(private val workDir: File) : Tool {
     }
 }
 
-class GodotTool(private val r
+class GodotTool(private val root: File) : Tool {
     override val name = "godot"
-    override val descrip
- 
+    override val description =
+        "Scan a Godot project and GDScript files for common syntax and unresolved-error patterns."
 
     private val errorPattern = Pattern.compile(
-        "\\b(error|parse error|unexpected indent|identifier .* no
+        "\\b(error|parse error|unexpected indent|identifier .* not declared)\\b",
         Pattern.CASE_INSENSITIVE
     )
 
     override fun execute(params: Map<String, String>): ToolResult {
         return try {
-         
-
+            val project =
+                if (File(root, "project.godot").exists()) {
                     root
-                } 
+                } else {
                     root.walkTopDown()
-               
-                        
+                        .firstOrNull { it.name == "project.godot" }
+                        ?.parentFile
                 }
 
-   
-                return ToolResult(false, "No pro
+            if (project == null) {
+                return Too
             }
 
-            val findings = project.walkTopDown()
-       
-             
-
+            val 
+                .filter { it.isFi
+                .flatMap { file ->
+                    file.readLines().mapI
                         if (
-                            line.conta
-                    
-                        ) {
-         
-                        } e
+            
+                     
+                 
+
+                        } el
                             null
                         }
                     }
@@ -164,54 +166,56 @@ class GodotTool(private val r
                 .take(200)
                 .toList()
 
-    
+            Too
                 true,
-           
+                "Godot project: ${project.absolutePath}\nScripts scanned.\n" +
                     if (findings.isEmpty())
-                        "No obvi
-                    else
-                
-            )
-       
-            ToolR
+                 
 
+                        findi
+                    }
+            )
+        } catch (e: Ex
+            ToolResult(false, e.message ?: "Godot sc
+        }
     }
 }
 
-class AgentEngine(p
-
-    fun choose(prompt: String): Tool? =
-        when {
-  
-            prompt.contains("gdscript", true) ->
-                t
-
-            prompt.contains("file", true)
-            prompt.contains("ملف", true) ||
-            prompt.contains("
-                tools.firstOrNull { it.name == "filesystem" }
-
-    
-            promp
-
-
-            else -> null
-   
-
-    fun execute(prompt: String): ToolResult? {
-        va
-
-        val params = when (tool.name) {
-           
-                mapOf("command" to prompt.substringAfter(":").trim())
+class AgentEngine(private val tools: List<Tool>) {
 
  
-                mapOf("action" to "list")
+        return when {
+            prompt.c
+            prompt.contains("gdscript", t
+                tools.firstOrNull { it.name == "godot" }
+
+            prom
+            prompt.contains("ملف", true) ||
+            
+                tools.firstOrNull { it.n
+
+            prompt.startsWith("termux:"
+            prompt.startsWith("sh
+                tools.firstOrNull { it.na
+
+            else -> null
+        }
+    }
+
+    fun execute(p
+        val tool = choose(prompt)
+
+        val params = when (tool.name) {
+            "termux" ->
+
+
+            "fil
+
 
             else ->
-                empty
+    
         }
 
-        return tool.execute(params)
+        return tool.
     }
 }
