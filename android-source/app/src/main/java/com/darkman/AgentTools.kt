@@ -1,3 +1,4 @@
+
 package com.darkman
 
 import java.io.File
@@ -10,49 +11,74 @@ interface Tool {
     fun execute(params: Map<String, String>): ToolResult
 }
 
-data class ToolResult(val ok: Boolean, val output: String)
+data class ToolResult(
+    val ok: Boolean,
+    val output: String
+)
 
 class FileSystemTool(private val root: File) : Tool {
-    override val name = "filesystem"
-    override val description = "Read, write, list, and search files below the selected project root."
 
-    private fun safe(path: String): File? =
-        runCatching { File(root, path).canonicalFile }
-            .getOrNull()
-            ?.takeIf {
-                it.path == root.canonicalPath ||
+    override val name = "filesystem"
+
+    override val description =
+        "Read, write, list, and search files below the selected project root."
+
+    private fun safe(path: String): File? {
+        return runCatching {
+            File(root, path).canonicalFile
+        }.getOrNull()?.takeIf {
+            it.path == root.canonicalPath ||
                 it.path.startsWith(root.canonicalPath + File.separator)
-            }
+        }
+    }
 
     override fun execute(params: Map<String, String>): ToolResult {
         return try {
             when (params["action"]) {
+
                 "read" -> {
-                    val f = safe(params["path"].orEmpty())
+                    val file = safe(params["path"].orEmpty())
                         ?: return ToolResult(false, "Unsafe path")
-                    ToolResult(
-                        f.isFile,
-                        if (f.isFile) f.readText(Charsets.UTF_8).take(50000)
-                        else "Not a file"
-                    )
+
+                    if (!file.isFile) {
+                        ToolResult(false, "Not a file")
+                    } else {
+                        ToolResult(
+                            true,
+                            file.readText(Charsets.UTF_8).take(50000)
+                        )
+                    }
                 }
 
                 "write" -> {
-                    val f = safe(params["path"].orEmpty())
+                    val file = safe(params["path"].orEmpty())
                         ?: return ToolResult(false, "Unsafe path")
-                    f.parentFile?.mkdirs()
-                    f.writeText(params["content"].orEmpty(), Charsets.UTF_8)
-                    ToolResult(true, "Wrote ${f.relativeTo(root)}")
+
+                    file.parentFile?.mkdirs()
+                    file.writeText(
+                        params["content"].orEmpty(),
+                        Charsets.UTF_8
+                    )
+
+                    ToolResult(true, "Wrote ${file.relativeTo(root)}")
                 }
 
                 "search" -> {
-                    val needle = params["query"].orEmpty()
+                    val query = params["query"].orEmpty()
+
                     val matches = root.walkTopDown()
-                        .filter { it.isFile && it.length() < 2_000_000 }
-                        .mapNotNull { f ->
+                        .filter {
+                            it.isFile && it.length() < 2_000_000
+                        }
+                        .mapNotNull { file ->
                             runCatching {
-                                if (f.readText().contains(needle, true)) {
-                                    f.relativeTo(root).path
+                                if (
+                                    file.readText().contains(
+                                        query,
+                                        ignoreCase = true
+                                    )
+                                ) {
+                                    file.relativeTo(root).path
                                 } else {
                                     null
                                 }
@@ -61,27 +87,38 @@ class FileSystemTool(private val root: File) : Tool {
                         .take(100)
                         .toList()
 
-                    ToolResult(true, matches.joinToString("\n"))
+                    ToolResult(
+                        true,
+                        matches.joinToString("\n")
+                    )
                 }
 
                 else -> {
+                    val files = root.walkTopDown()
+                        .filter { it != root }
+                        .take(200)
+                        .map { it.relativeTo(root).path }
+                        .toList()
+
                     ToolResult(
                         true,
-                        root.walkTopDown()
-                            .filter { it != root }
-                            .take(200)
-                            .joinToString("\n") { it.relativeTo(root).path }
+                        files.joinToString("\n")
                     )
                 }
             }
         } catch (e: Exception) {
-            ToolResult(false, e.message ?: "Filesystem error")
+            ToolResult(
+                false,
+                e.message ?: "Filesystem error"
+            )
         }
     }
 }
 
 class TermuxTool(private val workDir: File) : Tool {
+
     override val name = "termux"
+
     override val description =
         "Execute a user-authorized shell command in the configured local/Termux working directory."
 
@@ -101,7 +138,11 @@ class TermuxTool(private val workDir: File) : Tool {
                 )
             }
 
-            val process = ProcessBuilder("sh", "-c", command)
+            val process = ProcessBuilder(
+                "sh",
+                "-c",
+                command
+            )
                 .directory(workDir)
                 .redirectErrorStream(true)
                 .start()
@@ -113,21 +154,26 @@ class TermuxTool(private val workDir: File) : Tool {
 
             ToolResult(
                 process.exitValue() == 0,
-                process.inputStream.bufferedReader().readText().take(20000)
+                process.inputStream
+                    .bufferedReader()
+                    .readText()
+                    .take(20000)
             )
         } catch (e: Exception) {
             ToolResult(
                 false,
-                e.message ?: "Shell unavailable; install Termux or choose a project directory"
+                e.message ?: "Shell unavailable"
             )
         }
     }
 }
 
 class GodotTool(private val root: File) : Tool {
+
     override val name = "godot"
+
     override val description =
-        "Scan a Godot project and GDScript files for common syntax and unresolved-error patterns."
+        "Scan a Godot project and GDScript files for common errors."
 
     private val errorPattern = Pattern.compile(
         "\\b(error|parse error|unexpected indent|identifier .* not declared)\\b",
@@ -136,86 +182,128 @@ class GodotTool(private val root: File) : Tool {
 
     override fun execute(params: Map<String, String>): ToolResult {
         return try {
-            val project =
-                if (File(root, "project.godot").exists()) {
-                    root
-                } else {
-                    root.walkTopDown()
-                        .firstOrNull { it.name == "project.godot" }
-                        ?.parentFile
-                }
 
-            if (project == null) {
-                return Too
+            val project = if (
+                File(root, "project.godot").exists()
+            ) {
+                root
+            } else {
+                root.walkTopDown()
+                    .firstOrNull {
+                        it.name == "project.godot"
+                    }
+                    ?.parentFile
             }
 
-            val 
-                .filter { it.isFi
-                .flatMap { file ->
-                    file.readLines().mapI
-                        if (
-            
-                     
-                 
+            if (project == null) {
+                return ToolResult(
+                    false,
+                    "No project.godot found"
+                )
+            }
 
-                        } el
-                            null
+            val findings = project.walkTopDown()
+                .filter {
+                    it.isFile && it.extension == "gd"
+                }
+                .flatMap { file ->
+
+                    file.readLines()
+                        .mapIndexedNotNull { index, line ->
+
+                            if (
+                                line.contains("TODO_ERROR") ||
+                                errorPattern.matcher(line).find()
+                            ) {
+                                "${file.relativeTo(project)}:${index + 1}: $line"
+                            } else {
+                                null
+                            }
                         }
-                    }
                 }
                 .take(200)
                 .toList()
 
-            Too
-                true,
-                "Godot project: ${project.absolutePath}\nScripts scanned.\n" +
-                    if (findings.isEmpty())
-                 
+            val result =
+                if (findings.isEmpty()) {
+                    "No obvious regex-detectable errors."
+                } else {
+                    findings.joinToString("\n")
+                }
 
-                        findi
-                    }
+            ToolResult(
+                true,
+                "Godot project: ${project.absolutePath}\n" +
+                    "Scripts scanned.\n" +
+                    result
             )
-        } catch (e: Ex
-            ToolResult(false, e.message ?: "Godot sc
+
+        } catch (e: Exception) {
+            ToolResult(
+                false,
+                e.message ?: "Godot scan failed"
+            )
         }
     }
 }
 
-class AgentEngine(private val tools: List<Tool>) {
+class AgentEngine(
+    private val tools: List<Tool>
+) {
 
- 
+    fun choose(prompt: String): Tool? {
+
         return when {
-            prompt.c
-            prompt.contains("gdscript", t
-                tools.firstOrNull { it.name == "godot" }
 
-            prom
-            prompt.contains("ملف", true) ||
-            
-                tools.firstOrNull { it.n
+            prompt.contains("godot", true) ||
+                prompt.contains("gdscript", true) -> {
+                tools.firstOrNull {
+                    it.name == "godot"
+                }
+            }
 
-            prompt.startsWith("termux:"
-            prompt.startsWith("sh
-                tools.firstOrNull { it.na
+            prompt.contains("file", true) ||
+                prompt.contains("ملف", true) ||
+                prompt.contains("مشروع", true) -> {
+                tools.firstOrNull {
+                    it.name == "filesystem"
+                }
+            }
+
+            prompt.startsWith("termux:", true) ||
+                prompt.startsWith("shell:", true) -> {
+                tools.firstOrNull {
+                    it.name == "termux"
+                }
+            }
 
             else -> null
         }
     }
 
-    fun execute(p
-        val tool = choose(prompt)
+    fun execute(prompt: String): ToolResult? {
+
+        val tool = choose(prompt) ?: return null
 
         val params = when (tool.name) {
-            "termux" ->
 
+            "termux" -> {
+                mapOf(
+                    "command" to prompt.substringAfter(":").trim()
+                )
+            }
 
-            "fil
+            "filesystem" -> {
+                mapOf(
+                    "action" to "list"
+                )
+            }
 
-
-            else ->
-    
+            else -> {
+                emptyMap()
+            }
         }
 
-        return tool.
+        return tool.execute(params)
     }
 }
