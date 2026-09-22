@@ -36,7 +36,19 @@ class MainActivity : Activity() {
     private val providers = arrayOf("Local AI (Qwen)", "Google Gemini Auto", "Google Gemini Flash-Lite", "Groq", "OpenRouter")
     private val requestCode = 42
     private val modelDownloader by lazy { ModelDownloader(this) }
-    private val agent by lazy { AgentEngine(listOf(FileSystemTool(storageRoot()), TermuxTool(filesDir), GodotTool(storageRoot()))) }
+    private val permissionManager = PermissionManager()
+    private val agent by lazy {
+        AgentEngine(
+            listOf(
+                FileSystemTool(storageRoot()),
+                TermuxTool(filesDir),
+                GitTool(filesDir),
+                GodotTool(storageRoot()),
+                UnityTool(storageRoot()),
+                UnrealTool(storageRoot())
+            )
+        )
+    }
     @Volatile private var localLoaded = false
 
     override fun onCreate(state: Bundle?) {
@@ -58,13 +70,151 @@ class MainActivity : Activity() {
     private fun loadSettings() { val saved = securePrefs.get("provider"); providerSpinner.setSelection(providers.indexOf(saved).let { if (it < 0) 0 else it }); apiKeyInput.setText(securePrefs.get("key_${providers[providerSpinner.selectedItemPosition]}")); baseUrlInput.setText(securePrefs.get("baseUrl")) }
 
     private fun sendChat() {
-        val prompt = chatInput.text.toString().trim(); if (prompt.isEmpty()) return
-        db.add("You", prompt, "chat"); chatInput.setText("")
-        val toolResult = agent.execute(prompt)
-        if (toolResult != null) { toolOutput.text = "Agent tool result:\n${toolResult.output}"; db.add("Tool", toolResult.output, "agent"); routeFinal(prompt, toolResult.output); return }
-        val provider = providers[providerSpinner.selectedItemPosition]; val key = apiKeyInput.text.toString().trim()
-        if (provider == providers[0]) ensureLocalAndGenerate(prompt) else if (key.isEmpty()) showLocalResponse(prompt) else callProvider(provider, key, prompt)
+        val prompt = chatInput.text.toString().trim()
+        if (prompt.isEmpty()) return
+
+        db.add("You", prompt, "chat")
+        chatInput.setText("")
+
+        val command = agent.commandFor(prompt)
+
+        if (command != null) {
+            executeAgentCommandWithPermission(
+                prompt,
+                command.first,
+                command.second
+            )
+            return
+        }
+
+        val provider = providers[
+            providerSpinner.selectedItemPosition
+        ]
+
+        val key =
+            apiKeyInput.text.toString().trim()
+
+        if (provider == providers[0]) {
+            ensureLocalAndGenerate(prompt)
+        } else if (key.isEmpty()) {
+            showLocalResponse(prompt)
+        } else {
+            callProvider(
+                provider,
+                key,
+                prompt
+            )
+        }
     }
+
+    private fun executeAgentCommandWithPermission(
+        prompt: String,
+        tool: Tool,
+        params: Map<String, String>
+    ) {
+        val capability = "tool:${tool.name}"
+
+        val commandText =
+            params["command"]
+                ?: "inspect ${tool.name} project"
+
+        if (
+            permissionManager.isGranted(
+                capability
+            )
+        ) {
+            executeTool(
+                tool,
+                params
+            )
+            return
+        }
+
+        val message =
+            "Darkman AI wants to use ${tool.name}.\n\n" +
+            "Request:\n$prompt\n\n" +
+            "Command/action:\n$commandText"
+
+        AlertDialog.Builder(this)
+            .setTitle(
+                "Allow Darkman AI tool?"
+            )
+            .setMessage(message)
+            .setPositiveButton(
+                "Allow once"
+            ) { _, _ ->
+                executeTool(
+                    tool,
+                    params
+                )
+            }
+            .setNeutralButton(
+                "Allow this task"
+            ) { _, _ ->
+
+                permissionManager.grant(
+                    capability,
+                    PermissionMode.SESSION
+                )
+
+                executeTool(
+                    tool,
+                    params
+                )
+            }
+            .setNegativeButton(
+                "Deny"
+            ) { _, _ ->
+
+                toolOutput.text =
+                    "Permission denied: ${tool.name}"
+
+                statusText.text =
+                    "Tool permission denied"
+            }
+            .show()
+    }
+
+    private fun executeTool(
+        tool: Tool,
+        params: Map<String, String>
+    ) {
+        statusText.text =
+            "Running ${tool.name}…"
+
+        Thread {
+
+            val result =
+                tool.execute(params)
+
+            runOnUiThread {
+
+                toolOutput.text =
+                    "Agent tool: ${tool.name}\n" +
+                    result.output
+
+                db.add(
+                    "Tool",
+                    result.output,
+                    "agent:${tool.name}"
+                )
+
+                statusText.text =
+                    if (result.ok) {
+                        "${tool.name} completed"
+                    } else {
+                        "${tool.name} failed"
+                    }
+
+                routeFinal(
+                    "Summarize the ${tool.name} tool result and identify the next development action.",
+                    result.output
+                )
+            }
+
+        }.start()
+    }
+
     private fun routeFinal(prompt: String, toolOutput: String) { val key = apiKeyInput.text.toString().trim(); if (key.isNotEmpty() && providerSpinner.selectedItemPosition != 0) callProvider(providers[providerSpinner.selectedItemPosition], key, "User request: $prompt\nTool output:\n$toolOutput") else showLocalResponse("Summarize this tool result: $toolOutput") }
     private fun ensureLocalAndGenerate(prompt: String) {
         statusText.text = "Preparing offline model…"
