@@ -14,755 +14,364 @@ data class ToolResult(
     val output: String
 )
 
-class FileSystemTool(
-    private val root: File
-) : Tool {
+private const val MAX_OUTPUT = 30_000
+private const val MAX_READ = 50_000
 
+private fun clipOutput(text: String, max: Int = MAX_OUTPUT): String {
+    if (text.length <= max) return text
+    return text.take(max) + "\n...[output truncated]"
+}
+
+private fun runShellCommand(
+    command: String,
+    workDir: File,
+    timeoutSeconds: Long = 120
+): ToolResult {
+    if (command.isBlank()) return ToolResult(false, "Command is empty")
+
+    return try {
+        val process = ProcessBuilder("sh", "-c", command)
+            .directory(workDir)
+            .redirectErrorStream(true)
+            .start()
+
+        val output = process.inputStream.bufferedReader().use { reader ->
+            val buffer = StringBuilder()
+            val chars = CharArray(4096)
+            var total = 0
+            while (true) {
+                val count = reader.read(chars)
+                if (count < 0) break
+                if (total < MAX_OUTPUT) {
+                    val allowed = minOf(count, MAX_OUTPUT - total)
+                    buffer.append(chars, 0, allowed)
+                    total += allowed
+                }
+            }
+            buffer.toString()
+        }
+
+        if (!process.waitFor(timeoutSeconds, TimeUnit.SECONDS)) {
+            process.destroy()
+            if (process.isAlive) process.destroyForcibly()
+            return ToolResult(false, "Command timed out after ${timeoutSeconds}s\n${clipOutput(output)}")
+        }
+
+        val exit = process.exitValue()
+        val resultText = clipOutput(output).trimEnd()
+        if (exit == 0) {
+            ToolResult(true, "exit=0\n$resultText")
+        } else {
+            ToolResult(false, "exit=$exit\n$resultText")
+        }
+    } catch (e: Exception) {
+        ToolResult(false, "Command failed: ${e.javaClass.simpleName}: ${e.message}")
+    }
+}
+
+class FileSystemTool(private val root: File) : Tool {
     override val name = "filesystem"
-
-    override val description =
-        "Read, write, list, and search files below the selected project root."
+    override val description = "Read, write, search and list files inside the allowed project root."
 
     private fun safe(path: String): File? {
-        return runCatching {
-            File(root, path).canonicalFile
-        }.getOrNull()?.takeIf {
-            it.path == root.canonicalPath ||
-                it.path.startsWith(root.canonicalPath + File.separator)
+        return try {
+            val base = root.canonicalFile
+            val candidate = File(base, path.ifBlank { "." }).canonicalFile
+            val basePath = base.path
+            val candidatePath = candidate.path
+            if (candidatePath == basePath || candidatePath.startsWith(basePath + File.separator)) {
+                candidate
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
-    override fun execute(
-        params: Map<String, String>
-    ): ToolResult {
-
+    override fun execute(params: Map<String, String>): ToolResult {
         return try {
-
-            when (params["action"]) {
-
+            when (params["action"]?.lowercase()) {
                 "read" -> {
-                    val file = safe(
-                        params["path"].orEmpty()
-                    )
-
-                    if (file == null) {
-                        ToolResult(false, "Unsafe path")
-                    } else if (!file.isFile) {
-                        ToolResult(false, "Not a file")
-                    } else {
-                        ToolResult(
-                            true,
-                            file.readText(
-                                Charsets.UTF_8
-                            ).take(50000)
-                        )
+                    val file = safe(params["path"].orEmpty())
+                        ?: return ToolResult(false, "Unsafe path")
+                    if (!file.isFile) return ToolResult(false, "File not found: ${params["path"]}")
+                    if (file.length() > MAX_READ) {
+                        return ToolResult(false, "File is larger than ${MAX_READ} bytes")
                     }
+                    ToolResult(true, file.readText())
                 }
 
                 "write" -> {
-                    val file = safe(
-                        params["path"].orEmpty()
-                    )
-
-                    if (file == null) {
-                        ToolResult(false, "Unsafe path")
-                    } else {
-                        file.parentFile?.mkdirs()
-
-                        file.writeText(
-                            params["content"].orEmpty(),
-                            Charsets.UTF_8
-                        )
-
-                        ToolResult(
-                            true,
-                            "Wrote ${file.relativeTo(root)}"
-                        )
-                    }
+                    val file = safe(params["path"].orEmpty())
+                        ?: return ToolResult(false, "Unsafe path")
+                    file.parentFile?.mkdirs()
+                    file.writeText(params["content"].orEmpty())
+                    ToolResult(true, "Wrote ${file.length()} bytes to ${file.path}")
                 }
 
                 "search" -> {
-                    val query =
-                        params["query"].orEmpty()
-
-                    val matches =
-                        root.walkTopDown()
-                            .filter {
-                                it.isFile &&
-                                    it.length() < 2_000_000
-                            }
-                            .mapNotNull { file ->
-                                runCatching {
-                                    if (
-                                        file.readText(
-                                            Charsets.UTF_8
-                                        ).contains(
-                                            query,
-                                            true
-                                        )
-                                    ) {
-                                        file.relativeTo(root).path
-                                    } else {
-                                        null
-                                    }
-                                }.getOrNull()
-                            }
-                            .take(100)
-                            .toList()
-
-                    ToolResult(
-                        true,
-                        matches.joinToString("\n")
-                    )
-                }
-
-                else -> {
-
-                    val files =
-                        root.walkTopDown()
-                            .filter {
-                                it != root
-                            }
-                            .take(300)
-                            .map {
-                                it.relativeTo(root).path
-                            }
-                            .toList()
-
-                    ToolResult(
-                        true,
-                        files.joinToString("\n")
-                    )
-                }
-            }
-
-        } catch (e: Exception) {
-
-
-                fals
-                e.message ?
-            )
-        }
-    }
-}
-
-
-class TermuxTool(
-
-)
-
-    override val name
-
-    override val de
-        "Run a user-au
-
-
-
-    ): ToolResult {
-
-
-
-            val command =
-
-
-                    .trim()
-
-
-
-                    false,
-
-                )
-            } else {
-
-                val process =
-
-
-                        "-c",
-
-                    )
-
-                        .redirectErrorStre
-                        .start(
-
-                if (
-                    !p
-                        120,
-                        TimeUnit.SECONDS
-
-
-
-
-
-                    ToolR
-                        false,
-
-
-
-                } el
-
-                    ToolResult(
-
-
-
-                            .readTex
-                            .take(30000)
-
-                }
-
-
-        } catch (e: Exception) {
-
-
-                false,
-                e.message ?: "She
-            )
-        }
-    }
-}
-
-
-class GitToo
-    private val workDir: File
-) : Tool {
-
-    override
-
-    override val descriptio
-        "Run an explicitly authoriz
-
-    override fun execute(
-
-    ): ToolResult {
-
-        return try {
-
-            val command =
-                para
-                    .orEmpty()
-
-
-            if (command.
-
-                Tool
-
-
-                )
-
-
-
-                val process =
-
-                        "sh",
-
-
-
-                        .directory(work
-                        .redirectErrorStream(true)
-
-
-                if (
-
-                        120,
-
-
-                ) {
-
-
-
-                    ToolResult(
-
-                        "Git command timed
-                    )
-
-
-
-                    ToolResult(
-
-                        process.i
-                            .bufferedReader()
-
-
-                    )
-                }
-
-
-        } catch (e: Exceptio
-
-            ToolResult(
-
-                e.message ?: "Git unavailable"
-
-
-    }
-}
-
-
-class GodotTool(
-    pr
-) : Tool {
-
-    override val name = "godot
-
-    override val description =
-
-
-    override fun execute(
-        params: M
-    ): ToolResult {
-
-        return try {
-
-            val
-                if (
-
-                        root,
-
-                    ).exists()
-
-                    root
-
+                    val query = params["query"].orEmpty()
+                    if (query.isBlank()) return ToolResult(false, "Search query is empty")
+                    val matches = mutableListOf<String>()
                     root.walkTopDown()
-
-                            it.name == "project.godot"
-
-                        ?.parentFile
-
-
-            if (project == null) {
-
-
-                    false,
-                    "
-                )
-
-            } else if
-                params["action"] == "ru
-            ) {
-
-                val command =
-
-                        .orEmpty()
-
-
-                if (command.isEmpty()) {
-
-
-                        false,
-
-                    )
-
-                } else
-
-                    val proc
-                        ProcessBuilder
-                            "sh",
-
-
-                        )
-
-                            .
-                            .start()
-
-
-
-
-
-                        )
-
-
-                        proces
-
-                        ToolResult(
-
-                            "Godot co
-                        )
-
-
-
-                        Tool
-                            process.ex
-                            proces
-                                .bufferedReader()
-
-
-                        )
-
-
-
-            } else {
-
-
-                    project.w
-                        .count {
-
-
-
-
-
-
-                        .count {
-
-
-
-
-                ToolResult
-
-
-
-
-
-
-
-        } catch
-
-
-
-
-            )
-
-
-}
-
-
-class UnityTool
-    private val root:
-
-
-
-
-    override val d
-
-
-
-        params: Map<Strin
-    ): Too
-
-        return try {
-
-
-
-
-
-                    }
-
-
-
-
-
-
-
-                )
-
-
-
-
-
-                    "Unity pr
-
-            }
-
-
-
-
-                false,
-                e.m
-            )
-        }
-    }
-}
-
-
-class UnrealTool(
-
-) : Tool {
-
-    overri
-
-    override val descriptio
-        "Detect Unreal Engine projects."
-
-
-        p
-
-
-
-
-            val project =
-                root.walkTopDo
-
-
-
-
-
-                    }
-
-
-
-
-
-                    "No .up
-                )
-
-            } els
-
-                ToolResult(
-
-
-                )
-
-
-        } catch (e: Exception) {
-
-
-                false,
-                e.message ?: "Unr
-            )
-        }
-    }
-}
-
-
-class Projec
-    private val root: File
-)
-
-    fun d
-
-        val g
-
-                .any {
-
+                        .filter { it.isFile && it.length() <= 2L * 1024L * 1024L }
+                        .forEach { file ->
+                            if (matches.size >= 100) return@forEach
+                            try {
+                                if (file.readText().contains(query, ignoreCase = true)) {
+                                    matches.add(file.relativeTo(root).path)
+                                }
+                            } catch (_: Exception) {
+                                // Ignore unreadable/binary files.
+                            }
+                        }
+                    ToolResult(true, if (matches.isEmpty()) "No matches" else matches.joinToString("\n"))
                 }
 
-        val unit
+                "list" -> {
+                    val lines = mutableListOf<String>()
+                    root.walkTopDown().forEach { file ->
+                        if (lines.size >= 300) return@forEach
+                        if (file != root) lines.add(file.relativeTo(root).path)
+                    }
+                    ToolResult(true, lines.joinToString("\n"))
+                }
 
-                .any {
-
-
-
-
-
-
-
-        val unreal =
-
-                .any
-                    it.extensi
-
-
-                    )
-
-
-        return build
-
-            if (
-
+                else -> ToolResult(false, "Unknown filesystem action. Use read, write, search, or list.")
             }
-
-
-
-
-
-            if (unreal) {
-
-
-
-        }.ifEmpty {
-
-        }.joinToSt
+        } catch (e: Exception) {
+            ToolResult(false, "Filesystem error: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 }
 
+class TermuxTool(private val workDir: File) : Tool {
+    override val name = "shell"
+    override val description = "Execute shell commands after the Android app permission gate. Compound commands are supported."
 
-enum class
+    override fun execute(params: Map<String, String>): ToolResult {
+        val command = params["command"].orEmpty().trim()
+        return runShellCommand(command, workDir, 120)
+    }
+}
 
+class GitTool(private val workDir: File) : Tool {
+    override val name = "git"
+    override val description = "Inspect and operate on a Git repository. Risky Git operations are still subject to the app permission gate."
+
+    private fun findGitRoot(): File? {
+        var current: File? = workDir.canonicalFile
+        repeat(8) {
+            if (current?.resolve(".git")?.exists() == true) return current
+            current = current?.parentFile
+        }
+        return null
+    }
+
+    override fun execute(params: Map<String, String>): ToolResult {
+        val command = params["command"].orEmpty().trim()
+        if (command.isBlank()) return ToolResult(false, "Git command is empty")
+
+        val repo = findGitRoot()
+            ?: return ToolResult(false, "No Git repository found from ${workDir.canonicalPath}. Pass the repository path in a future GitTool configuration.")
+
+        return runShellCommand("git $command", repo, 120)
+    }
+}
+
+private fun findProjectRoot(root: File, marker: String): File? {
+    val base = try { root.canonicalFile } catch (_: Exception) { return null }
+    if (base.resolve(marker).exists()) return base
+
+    return try {
+        base.walkTopDown()
+            .maxDepth(4)
+            .firstOrNull { it.isDirectory && it.resolve(marker).exists() }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+class GodotTool(private val root: File) : Tool {
+    override val name = "godot"
+    override val description = "Inspect and run commands against a Godot project."
+
+    override fun execute(params: Map<String, String>): ToolResult {
+        val project = findProjectRoot(root, "project.godot")
+            ?: return ToolResult(false, "No project.godot found under ${root.path}")
+
+        val command = params["command"]?.trim().orEmpty()
+        if (command.isNotEmpty()) {
+            return runShellCommand(command, project, 120)
+        }
+
+        val gd = project.walkTopDown().count { it.isFile && it.extension.equals("gd", true) }
+        val scenes = project.walkTopDown().count { it.isFile && it.extension.equals("tscn", true) }
+        return ToolResult(
+            true,
+            "Godot project detected: ${project.path}\nGDScript files: $gd\nScenes: $scenes"
+        )
+    }
+}
+
+class UnityTool(private val root: File) : Tool {
+    override val name = "unity"
+    override val description = "Detect and inspect a Unity project."
+
+    override fun execute(params: Map<String, String>): ToolResult {
+        val project = try {
+            root.canonicalFile.walkTopDown()
+                .maxDepth(4)
+                .firstOrNull {
+                    it.isDirectory &&
+                        it.resolve("ProjectSettings").isDirectory &&
+                        it.resolve("Assets").isDirectory
+                }
+        } catch (_: Exception) {
+            null
+        }
+
+        if (project == null) return ToolResult(false, "No Unity project found under ${root.path}")
+
+        val scripts = project.resolve("Assets").walkTopDown()
+            .count { it.isFile && it.extension.equals("cs", true) }
+        return ToolResult(true, "Unity project detected: ${project.path}\nC# scripts: $scripts")
+    }
+}
+
+class UnrealTool(private val root: File) : Tool {
+    override val name = "unreal"
+    override val description = "Detect and inspect an Unreal Engine project."
+
+    override fun execute(params: Map<String, String>): ToolResult {
+        val project = try {
+            root.canonicalFile.walkTopDown()
+                .maxDepth(5)
+                .firstOrNull { it.isFile && it.extension.equals("uproject", true) }
+        } catch (_: Exception) {
+            null
+        }
+
+        if (project == null) return ToolResult(false, "No .uproject file found under ${root.path}")
+        return ToolResult(true, "Unreal project detected: ${project.path}")
+    }
+}
+
+class ProjectDetector(private val root: File) {
+    fun detect(): String {
+        val godot = findProjectRoot(root, "project.godot")
+        if (godot != null) return "Godot: ${godot.path}"
+
+        val unity = try {
+            root.canonicalFile.walkTopDown()
+                .maxDepth(4)
+                .firstOrNull {
+                    it.isDirectory &&
+                        it.resolve("ProjectSettings").isDirectory &&
+                        it.resolve("Assets").isDirectory
+                }
+        } catch (_: Exception) {
+            null
+        }
+        if (unity != null) return "Unity: ${unity.path}"
+
+        val unreal = try {
+            root.canonicalFile.walkTopDown()
+                .maxDepth(5)
+                .firstOrNull { it.isFile && it.extension.equals("uproject", true) }
+        } catch (_: Exception) {
+            null
+        }
+        if (unreal != null) return "Unreal: ${unreal.path}"
+
+        return "Unknown project"
+    }
+}
+
+enum class PermissionMode {
+    ONCE,
     SESSION
 }
 
+class PermissionManager {
+    private val sessionGrants = mutableSetOf<String>()
 
-class PermissionManager
-
-    private val sessionGrants =
-        mutableSe
-
-
-
-    ): Boolean {
-
-
-        )
+    fun isGranted(capability: String): Boolean {
+        return sessionGrants.contains(capability)
     }
 
-    fun gra
-        capability:
-
-    ) {
-
-        if
-
-        ) {
-
-
-            )
+    fun grant(capability: String, mode: PermissionMode) {
+        if (mode == PermissionMode.SESSION) {
+            sessionGrants.add(capability)
         }
     }
 
-
-        sessionGrants.c
+    fun revokeAll() {
+        sessionGrants.clear()
     }
 }
 
+class AgentEngine(private val tools: List<Tool>) {
+    fun choose(prompt: String): Tool? {
+        val text = prompt.trim()
+        return when {
+            text.startsWith("shell:", true) || text.startsWith("termux:", true) ->
+                tools.firstOrNull { it.name == "shell" }
 
-class AgentEngine(
-    private v
-) {
+            text.startsWith("git:", true) || text.contains("git status", true) || text.contains("git diff", true) ->
+                tools.firstOrNull { it.name == "git" }
 
-    fun choose(
+            text.startsWith("godot:", true) || text.contains("godot", true) || text.contains("gdscript", true) ->
+                tools.firstOrNull { it.name == "godot" }
 
+            text.startsWith("unity:", true) || text.contains("unity", true) ->
+                tools.firstOrNull { it.name == "unity" }
 
+            text.startsWith("unreal:", true) || text.contains("unreal", true) || text.contains("uproject", true) ->
+                tools.firstOrNull { it.name == "unreal" }
 
+            text.contains("file", true) || text.contains("ملف", true) || text.contains("مشروع", true) ->
+                tools.firstOrNull { it.name == "filesystem" }
 
-
-            prompt.startsWith(
-
-
-            ) ||
-
-                    "termux:",
-
-
-                tools.fir
-                    i
-                }
-
-
-            prompt.startsWit
-
-                true
-
-
-                    it.name == "git"
-
-
-
-
-
-
-
-
-
-
-
-                tools.firstOrN
-
-                }
-
-
-
-
-                true
-
-                p
-
-
-                ) ->
-
-
-                }
-
-
-
-                "unreal:",
-
-            ) ||
-
-                    "unreal",
-
-
-                tools.fi
-
-                }
-            }
-
-
-
-                true
-            ) ||
-
-
-                    true
-
-
-
-                }
-            }
-
-
-
+            else -> null
+        }
     }
 
-    fu
-        prompt: String
+    fun commandFor(prompt: String): Pair<Tool, Map<String, String>>? {
+        val tool = choose(prompt) ?: return null
+        val text = prompt.trim()
 
+        val params = when (tool.name) {
+            "shell" -> mapOf(
+                "command" to text.substringAfter(":", "").trim()
+            )
 
-        val tool =
+            "git" -> mapOf(
+                "command" to text.substringAfter(":", "status --short").trim()
+                    .ifBlank { "status --short" }
+            )
 
-                ?
-
-        return when (
-
-        ) {
-
-            "shell" -> {
-
-
-
-                            .
-                )
-
-
-            "git" -> {
-
-
-
-                            .trim()
-
-
-
-                )
-
-
-
-
-                if (
-
-
-
-                    )
-
-                    tool to mapOf(
-
-                        "command"
-
-
-                    )
-
-
+            "godot" -> {
+                if (text.startsWith("godot:", true)) {
+                    mapOf("command" to text.substringAfter(":").trim())
+                } else {
+                    emptyMap()
                 }
+            }
 
+            "unity", "unreal" -> emptyMap()
 
-            "unity",
-            "u
+            "filesystem" -> mapOf("action" to "list")
 
-
-
-            "filesys
-                t
-
-                )
-
-
-
+            else -> emptyMap()
         }
+
+        return Pair(tool, params)
+    }
+
+    fun execute(prompt: String): ToolResult? {
+        val command = commandFor(prompt) ?: return null
+        return command.first.execute(command.second)
     }
 }
